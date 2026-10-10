@@ -187,4 +187,14 @@ if (content::WebContents::HasLiveWebContentsForBrowserContext(profile)) { return
 sed -i 's/|| mSupportedProfileType == SupportedProfileType.REGULAR) {/|| mSupportedProfileType == SupportedProfileType.REGULAR || mSupportedProfileType == SupportedProfileType.MIXED) {/' chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 sed -i 's/|| mSupportedProfileType == SupportedProfileType.OFF_THE_RECORD) {/|| mSupportedProfileType == SupportedProfileType.OFF_THE_RECORD || mSupportedProfileType == SupportedProfileType.MIXED) {/' chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 
+# one-hand: tab switcher (Hub) toolbar at the bottom
+HUB_LAYOUT=chrome/browser/hub/internal/android/res/layout/hub_layout.xml
+sed -i 's|android:layout_marginTop="@dimen/toolbar_height_no_shadow"|android:layout_marginBottom="@dimen/toolbar_height_no_shadow"|' $HUB_LAYOUT
+sed -i 's|<include layout="@layout/hub_toolbar_layout" />|<include layout="@layout/hub_toolbar_layout" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_gravity="bottom" />|' $HUB_LAYOUT
+# keep the bottom toolbar clear of the navigation bar when edge-to-edge is active
+sed -i 's|HubPaneHostView hubPaneHostView = mContainerView.findViewById(R.id.hub_pane_host);|mEdgeToEdgePadAdjuster = org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeControllerFactory.createForViewAndObserveSupplier(mContainerView.findViewById(R.id.hub_toolbar), edgeToEdgeSupplier);\n        &|' chrome/browser/hub/internal/android/java/src/org/chromium/chrome/browser/hub/HubCoordinator.java
+
+# one-hand: main tab switcher grid anchored to the bottom (adapter order unchanged; tab group dialog and multi-select editor are left alone)
+sed -i '0,/TabListRecyclerView recyclerView = tabListCoordinator.getContainerView();/s//&\n            if (recyclerView.getLayoutManager() instanceof androidx.recyclerview.widget.LinearLayoutManager titaniumLlm) titaniumLlm.setStackFromEnd(true);/' chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabSwitcherPaneCoordinator.java
+
 export PATCHED=1

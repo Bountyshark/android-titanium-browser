@@ -52,15 +52,23 @@ jobs:
         run: echo "RUN_START=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: Free up disk space
-        uses: easimon/maximize-build-space@v10
-        with:
-          root-reserve-mb: 12288
-          swap-size-mb: 8192
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
-          remove-docker-images: 'true'
+        # This runner image has ONE 145 GB root disk (no separate /mnt disk any more), so everything
+        # stays on it: remove big preinstalled toolchains we do not use and enlarge swap for linking.
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/local/share/powershell /usr/share/swift
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+          sudo apt-get clean
+          sudo swapoff -a || true
+          sudo rm -f /swapfile
+          sudo fallocate -l 8G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile >/dev/null && sudo swapon /swapfile
+          df -h /; free -h
+          avail=$(df --output=avail -BG / | tail -n1 | tr -dc '0-9')
+          if [ "$avail" -lt 80 ]; then
+            echo "::error::only ${avail} GB free on the runner, need at least 80 GB. Stopping before wasting hours."
+            exit 1
+          fi
 
       - uses: actions/checkout@v5
         with:

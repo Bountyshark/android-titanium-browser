@@ -165,12 +165,14 @@ prepare() {
   git am --whitespace=nowarn --keep-non-patch "$SCRIPT_DIR"/vanadium/patches/*.patch || return 1
 
   gclient sync -D --no-history --nohooks || return 1
+  log "after gclient sync: $(df -h "$ROOT" | tail -n1)"
   gclient runhooks || return 1
   ./build/install-build-deps.sh --no-prompt || return 1
 
   source "$SCRIPT_DIR/patch.sh"
   make_args
   gn gen out/Default || return 1
+  log "preparation done: $(df -h "$ROOT" | tail -n1)"
   touch "$ROOT/chromium/.titanium_prep_done"
 }
 

@@ -1,0 +1,124 @@
+name: Build (staged, free runner, arm64)
+
+# Builds Titanium for arm64-v8a on GitHub's free runners by splitting the build
+# into resumable stages. Each stage builds for ~4.5h, checkpoints the tree to a
+# "build-state" release, and starts the next stage by itself.
+#
+# Needs: Settings > Actions > General > Workflow permissions = "Read and write".
+# This file must exist on the DEFAULT branch of your fork for self-dispatch to work.
+
+on:
+  workflow_dispatch:
+    inputs:
+      official:
+        description: 'Official build flags (ThinLTO). Much slower - leave off on free runners'
+        type: boolean
+        default: false
+      fresh:
+        description: 'Throw away checkpoints and start from scratch'
+        type: boolean
+        default: false
+      reapply:
+        description: 'Reuse the finished checkpoint, re-run patch.sh and rebuild incrementally'
+        type: boolean
+        default: false
+      publish:
+        description: 'Publish the signed APK as a (pre)release (otherwise: workflow artifact)'
+        type: boolean
+        default: true
+      keep_state:
+        description: 'Keep the final checkpoint so later builds can use "reapply"'
+        type: boolean
+        default: true
+      max_stages:
+        description: 'Safety cap on the number of stages'
+        type: string
+        default: '14'
+
+permissions:
+  contents: write   # releases (APK + checkpoints)
+  actions: write    # lets a stage start the next stage
+
+concurrency:
+  group: build-staged
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Record start time
+        run: echo "RUN_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Free up disk space
+        uses: easimon/maximize-build-space@v10
+        with:
+          root-reserve-mb: 12288
+          swap-size-mb: 8192
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-docker-images: 'true'
+
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Build until the time budget is used up
+        id: build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OFFICIAL: ${{ inputs.official }}
+          FRESH: ${{ inputs.fresh }}
+          REAPPLY: ${{ inputs.reapply }}
+          MAX_STAGES: ${{ inputs.max_stages }}
+        run: bash ci/staged.sh build
+
+      - name: Save checkpoint
+        if: always() && (steps.build.outputs.result == 'paused' || steps.build.outputs.result == 'failed')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash ci/staged.sh save
+
+      - name: Sign and publish
+        if: steps.build.outputs.result == 'complete'
+        id: finish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OFFICIAL: ${{ inputs.official }}
+          PUBLISH: ${{ inputs.publish }}
+          LOCAL_TEST_JKS: ${{ secrets.LOCAL_TEST_JKS }}
+          STORE_TEST_JKS: ${{ secrets.STORE_TEST_JKS }}
+        run: bash ci/staged.sh finish
+
+      - name: Upload APK as artifact
+        if: steps.build.outputs.result == 'complete' && !inputs.publish
+        uses: actions/upload-artifact@v7
+        with:
+          name: titanium-arm64-v8a
+          path: ${{ steps.finish.outputs.apk }}
+
+      - name: Save final checkpoint (for later incremental rebuilds)
+        if: steps.build.outputs.result == 'complete' && inputs.keep_state && !inputs.reapply
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash ci/staged.sh save
+
+      - name: Start next stage
+        if: success() && steps.build.outputs.result == 'paused'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run build-staged.yml --ref "${{ github.ref_name }}" \
+            -f official=${{ inputs.official }} -f publish=${{ inputs.publish }} \
+            -f keep_state=${{ inputs.keep_state }} -f max_stages=${{ inputs.max_stages }} \
+            -f fresh=false -f reapply=false
+
+      - name: Fail the run if the build did not succeed
+        if: always() && steps.build.outputs.result != 'complete' && steps.build.outputs.result != 'paused'
+        run: |
+          echo "::error::build result: '${{ steps.build.outputs.result }}'"
+          exit 1

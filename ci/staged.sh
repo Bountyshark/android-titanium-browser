@@ -270,6 +270,9 @@ cmd_finish() {
   local name
   name="$VERSION-$(date +%s)-arm64-v8a.apk"
   cp "out/release/$VERSION-arm64-v8a.apk" "$ROOT/chromium/$name"
+  mkdir -p "$ROOT/chromium/mapping"
+  find out/Default -name '*.mapping' -exec cp -v {} "$ROOT/chromium/mapping/" \;
+  out mapping "$ROOT/chromium/mapping"
   out apk "$ROOT/chromium/$name"
   if [ "$PUBLISH" = "true" ]; then
     local tag="v$VERSION" flags=""

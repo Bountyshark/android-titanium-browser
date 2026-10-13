@@ -137,7 +137,7 @@ make_args() {   # run inside chromium/src
     sed -i -e 's/^is_official_build = true/is_official_build = false/' \
            -e 's/^symbol_level = .*/symbol_level = 0/' \
            -e '/^generate_linker_map/d' out/Default/args.gn
-    printf 'blink_symbol_level = 0\nv8_symbol_level = 0\ntreat_warnings_as_errors = false\n' >> out/Default/args.gn
+    printf 'blink_symbol_level = 0\nv8_symbol_level = 0\ntreat_warnings_as_errors = false\nenable_java_asserts = false\n' >> out/Default/args.gn
   fi
 }
 

@@ -209,4 +209,7 @@ sed -i 's|mModelList = mDelegate.getMenuItems();|&\n        if (isFromBottomBar 
 sed -i 's|mListView = contentView.findViewById(R.id.app_menu_list);|&\n        mListView.setStackFromBottom(isFromBottomBar \|\| controlsPosition == ControlsPosition.BOTTOM);|' chrome/browser/ui/android/appmenu/internal/java/src/org/chromium/chrome/browser/ui/appmenu/AppMenu.java
 sed -i 's|getInitialHeightForView(i)|getInitialHeightForView(mListView != null \&\& mListView.isStackFromBottom() ? itemCount - 1 - i : i)|;s|canBeLastVisibleInitialView(i)|canBeLastVisibleInitialView(mListView != null \&\& mListView.isStackFromBottom() ? itemCount - 1 - i : i)|' chrome/browser/ui/android/appmenu/internal/java/src/org/chromium/chrome/browser/ui/appmenu/AppMenu.java # size from bottom
 
+# onehand: NTP content, tab switcher toolbar and tab grid at the bottom (see patches/onehand.py)
+/usr/bin/python3 "$SCRIPT_DIR/patches/onehand.py"
+
 export PATCHED=1
